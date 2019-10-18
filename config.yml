@@ -1,0 +1,11 @@
+cloneUrl: 'git@github.com:feater-dev/feater.git'
+images:
+  - version: 'latest'
+    sourceBranch: 'master'
+    dockerVersions: &dockerVersions
+      - '18.06.3'
+      - '18.09.2'
+      - 'latest'
+  - version: 'edge'
+    sourceBranch: 'develop'
+    dockerVersions: *dockerVersions

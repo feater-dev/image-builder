@@ -1,11 +1,29 @@
-cloneUrl: 'git@github.com:feater-dev/feater.git'
 images:
-  - version: 'latest'
-    sourceBranch: 'master'
+
+  # Semantically numbered.
+
+  - version: '0.1'
+    buildContext: &buildContextLatest './docker/0.1'
+    sources: &sourceLatest
+      - cloneUrl: &cloneUrl 'git@github.com:feater-dev/feater.git'
+        branch: 'master'
+        cloneDirectory: 'source'
     dockerVersions: &dockerVersions
       - '18.06.3'
       - '18.09.2'
       - 'latest'
+
+  # Edge and latest.
+
+  - version: 'latest'
+    buildContext: *buildContextLatest
+    sources: *sourceLatest
+    dockerVersions: *dockerVersions
+
   - version: 'edge'
-    sourceBranch: 'develop'
+    buildContext: *buildContextLatest
+    sources:
+      - cloneUrl: *cloneUrl
+        branch: 'develop'
+        cloneDirectory: 'source'
     dockerVersions: *dockerVersions

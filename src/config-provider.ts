@@ -1,27 +1,38 @@
-import { ImageTagGenerator } from './image-tag-generator';
+import {ImageTagGenerator} from './image-tag-generator';
 import * as jsYaml from 'js-yaml';
 import * as fs from 'fs';
+import {ReferenceType} from "./source-provider";
 
 interface RawConfig {
-    cloneUrl: string
     images: Array<{
         version: string;
-        sourceBranch?: string;
-        sourceTag?: string;
+        buildContext: string;
+        sources: Array<{
+            cloneUrl: string;
+            branch?: string;
+            tag?: string;
+            cloneDirectory: string;
+        }>;
         dockerVersions: string[];
     }>;
+}
+
+export interface SourceConfig {
+    cloneUrl: string;
+    referenceType: ReferenceType,
+    referenceName: string,
+    cloneDirectory: string,
 }
 
 export interface ImageConfig {
     imageTag: string;
     version: string;
-    sourceBranch?: string;
-    sourceTag?: string;
+    buildContext: string;
+    sources: SourceConfig[];
     dockerVersion: string;
 }
 
 export interface Config {
-    cloneUrl: string,
     images: ImageConfig[];
 }
 
@@ -39,17 +50,38 @@ export class ConfigProvider {
         }
 
         const mappedConfig: Config = {
-            cloneUrl: rawConfig.cloneUrl,
             images: [],
         };
 
         for (const rawImageConfig of rawConfig.images) {
+            const mappedSourceConfigs: SourceConfig[] = [];
+            for (const rawSourceConfig of rawImageConfig.sources) {
+                let referenceType: ReferenceType;
+                let referenceName: string;
+                if (rawSourceConfig.branch && rawSourceConfig.tag) {
+                    throw new Error('Both branch and name referenced in source config.');
+                } else if (rawSourceConfig.branch) {
+                    referenceType = ReferenceType.BRANCH;
+                    referenceName = rawSourceConfig.branch;
+                } else if (rawSourceConfig.tag) {
+                    referenceType = ReferenceType.TAG;
+                    referenceName = rawSourceConfig.tag;
+                } else {
+                    throw new Error('Neither branch nor name referenced in source config.');
+                }
+                mappedSourceConfigs.push({
+                    cloneUrl: rawSourceConfig.cloneUrl,
+                    referenceType,
+                    referenceName,
+                    cloneDirectory: rawSourceConfig.cloneDirectory,
+                });
+            }
             for (const dockerVersion of rawImageConfig.dockerVersions) {
                 mappedConfig.images.push({
                     imageTag: this.imageTagGenerator.generate(rawImageConfig.version, dockerVersion),
+                    buildContext: rawImageConfig.buildContext,
                     version: rawImageConfig.version,
-                    sourceBranch: rawImageConfig.sourceBranch,
-                    sourceTag: rawImageConfig.sourceTag,
+                    sources: mappedSourceConfigs,
                     dockerVersion,
                 });
             }
@@ -59,9 +91,7 @@ export class ConfigProvider {
     }
 
     private isRawConfigValid(config: unknown): config is RawConfig {
-        if (
-            'string' !== typeof (config as RawConfig).cloneUrl
-            || !((config as RawConfig).images instanceof Array)
+        if (!((config as RawConfig).images instanceof Array)
         ) {
             return false;
         }
@@ -69,11 +99,21 @@ export class ConfigProvider {
         for (const imageConfig of (config as RawConfig).images) {
             if (
                 'string' !== typeof imageConfig.version
-                || ('undefined' !== typeof imageConfig.sourceTag && 'string' !== typeof imageConfig.sourceTag)
-                || ('undefined' !== typeof imageConfig.sourceBranch && 'string' !== typeof imageConfig.sourceBranch)
+                || 'string' !== typeof imageConfig.buildContext
+                || !((imageConfig.sources) instanceof Array)
                 || !((imageConfig.dockerVersions) instanceof Array)
             ) {
                 return false;
+            }
+            for (const sourceConfig of imageConfig.sources) {
+                if (
+                    'string' !== typeof sourceConfig.cloneUrl
+                    || ('string' !== typeof sourceConfig.branch && 'undefined' !== typeof sourceConfig.branch)
+                    || ('string' !== typeof sourceConfig.tag && 'undefined' !== typeof sourceConfig.tag)
+                    || 'string' !== typeof sourceConfig.cloneDirectory
+                ) {
+                    return false;
+                }
             }
             for (const dockerVersion of imageConfig.dockerVersions) {
                 if ('string' !== typeof dockerVersion) {

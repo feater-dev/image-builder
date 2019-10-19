@@ -8,9 +8,9 @@
     "url": "http://github.com/malef"
   },
   "scripts": {
-    "dockerhub:test": "ts-node build.ts",
-    "dockerhub:build": "ts-node build.ts --config config.yml",
-    "dockerhub:build-and-push": "ts-node build.ts --config config.yml --push"
+    "dockerhub:test": "ts-node src/build-images.ts",
+    "dockerhub:build": "ts-node src/build-images.ts --config config.yml",
+    "dockerhub:build-and-push": "ts-node src/build-images.ts --config config.yml --push"
   },
   "dependencies": {
     "@types/command-line-args": "^5.0.0",

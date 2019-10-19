@@ -1,38 +1,44 @@
 import { ImageConfig } from './config-provider';
 import * as childProcess from 'child_process';
+import {SourceProvider} from "./source-provider";
+import * as path from 'path';
+import * as fs from 'fs';
+import * as rimraf from 'rimraf';
 
 export class ImageBuilder {
 
     constructor(
-        private readonly cloneDirectory: string,
+        private readonly sourceProvider: SourceProvider,
     ) {}
 
     build(imageConfig: ImageConfig): void {
-        const {imageTag, version, sourceBranch, sourceTag, dockerVersion} = imageConfig;
+        for (const sourceConfig of imageConfig.sources) {
+            const { cloneUrl, referenceType, referenceName } = sourceConfig;
 
-        const gitResetCommand = `cd ${this.cloneDirectory} && git reset --hard`;
-        const dockerBuildCommand = `docker build --pull --build-arg DOCKER_VERSION=${dockerVersion} -f ./.docker/prod/Dockerfile -t ${imageTag} .`;
-        let gitCheckoutCommand: string;
+            console.info(`\n\n--- Cloning repository ${cloneUrl} and checking out ${referenceType} named ${referenceName}...\n\n`);
 
-        if (!sourceBranch && !sourceTag) {
-            throw new Error(`Neither branch nor tag defined for image config.`);
+            const fullCloneDirectory = path.join(imageConfig.buildContext, sourceConfig.cloneDirectory);
+
+            rimraf.sync(fullCloneDirectory);
+            fs.mkdirSync(fullCloneDirectory);
+
+            this.sourceProvider.provide(cloneUrl, referenceType, referenceName, fullCloneDirectory);
         }
 
-        if (sourceBranch && sourceTag) {
-            throw new Error(`Both branch and tag defined for image config.`);
+        const {imageTag, buildContext, dockerVersion} = imageConfig;
+
+        console.info(`\n\n--- Building image ${imageTag} in ${buildContext}...\n\n`);
+
+        childProcess.execSync(
+            `(cd ${buildContext} && docker build --pull --build-arg DOCKER_VERSION=${dockerVersion} -f ./Dockerfile -t ${imageTag} .)`,
+            {stdio: 'inherit'},
+        );
+
+        for (const sourceConfig of imageConfig.sources) {
+            const fullCloneDirectory = path.join(imageConfig.buildContext, sourceConfig.cloneDirectory);
+
+            this.sourceProvider.remove(fullCloneDirectory);
         }
-
-        if (sourceBranch) {
-            console.info(`\n\n--- Building image ${imageTag} for branch ${sourceBranch} and Docker version ${dockerVersion}...\n\n`);
-            gitCheckoutCommand = `git checkout ${sourceBranch}`;
-        } else if (sourceTag) {
-            console.info(`\n\nBuilding image ${imageTag} for tag ${sourceTag} and Docker version ${dockerVersion}...\n\n`);
-            gitCheckoutCommand = `git checkout tags/${sourceTag}`;
-        }
-
-        const commands = [gitResetCommand, gitCheckoutCommand, dockerBuildCommand];
-
-        childProcess.execSync(commands.join(' && '), {stdio: 'inherit'});
     }
 
 }
